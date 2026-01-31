@@ -16,7 +16,7 @@ class DatabaseHelper {
 
     database = await openDatabase(
       path,
-      version: 1,
+      version: 2,
       onCreate: (db, version) async {
         await db.execute('''
           CREATE TABLE jobs (
@@ -51,15 +51,71 @@ class DatabaseHelper {
             synced INTEGER NOT NULL
           )
         ''');
+
+        await db.execute('''
+          CREATE TABLE users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT NOT NULL UNIQUE,
+            password TEXT NOT NULL
+          )
+        ''');
+
+        await db.insert('users', {
+          'username': 'user1',
+          'password': 'securepass'
+        });
+      },
+      onUpgrade: (db, oldVersion, newVersion) async {
+        if (oldVersion < 2) {
+          await db.execute('''
+            CREATE TABLE IF NOT EXISTS users (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              username TEXT NOT NULL UNIQUE,
+              password TEXT NOT NULL
+            )
+          ''');
+
+          List<Map<String, dynamic>> existing = await db.query(
+            'users',
+            where: 'username = ?',
+            whereArgs: ['user1'],
+            limit: 1
+          );
+
+          if (existing.isEmpty) {
+            await db.insert('users', {
+              'username': 'user1',
+              'password': 'securepass'
+            });
+          }
+        }
       }
     );
 
     return database!;
   }
 
-  static Future<int> addJob(Job job) async {
+  static Future<bool> authenticateUser(String username, String password) async {
+    final db = await getDatabase();
+
+    final rows = await db.query(
+      'users',
+      columns: ['id'],
+      where: 'username = ? AND password = ?',
+      whereArgs: [username, password],
+      limit: 1
+    );
+
+    return rows.isNotEmpty;
+  }
+
+  static Future<int> insertJob(Job job) async {
     final db = await getDatabase();
     return await db.insert('jobs', job.toMap());
+  }
+
+  static Future<int> addJob(Job job) async {
+    return insertJob(job);
   }
 
   static Future<List<Job>> getAllJobs() async {
@@ -90,9 +146,13 @@ class DatabaseHelper {
     );
   }
 
-  static Future<int> addInspectionItem(InspectionItem item) async {
+  static Future<int> insertInspectionItem(InspectionItem item) async {
     final db = await getDatabase();
     return await db.insert('inspection_items', item.toMap());
+  }
+
+  static Future<int> addInspectionItem(InspectionItem item) async {
+    return insertInspectionItem(item);
   }
 
   static Future<List<InspectionItem>> getInspectionItemsForJob(int jobId) async {
@@ -128,9 +188,13 @@ class DatabaseHelper {
     );
   }
 
-  static Future<int> addAttachment(Attachment attachment) async {
+  static Future<int> insertAttachment(Attachment attachment) async {
     final db = await getDatabase();
     return await db.insert('attachments', attachment.toMap());
+  }
+
+  static Future<int> addAttachment(Attachment attachment) async {
+    return insertAttachment(attachment);
   }
 
   static Future<List<Attachment>> getAttachmentsForInspectionItem(int inspectionItemId) async {
