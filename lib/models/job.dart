@@ -1,5 +1,6 @@
 class Job {
   int? id;
+  int? serverId;
   String jobNumber;
   String aircraft;
   String description;
@@ -8,6 +9,7 @@ class Job {
 
   Job({
     this.id,
+    this.serverId,
     required this.jobNumber,
     required this.aircraft,
     required this.description,
@@ -16,25 +18,26 @@ class Job {
   });
 
   Map<String, dynamic> toMap() {
-    Map<String, dynamic> map = {};
-    map['id'] = id;
-    map['jobNumber'] = jobNumber;
-    map['aircraft'] = aircraft;
-    map['description'] = description;
-    map['status'] = status;
-    map['synced'] = synced;
-    return map;
+    Map<String, dynamic> m = {};
+    m['id'] = id;
+    m['serverId'] = serverId;
+    m['jobNumber'] = jobNumber;
+    m['aircraft'] = aircraft;
+    m['description'] = description;
+    m['status'] = status;
+    m['synced'] = synced;
+    return m;
   }
 
-  static Job fromMap(Map<String, dynamic> map) {
-    Job job = Job(
-      id: map['id'],
-      jobNumber: map['jobNumber'],
-      aircraft: map['aircraft'],
-      description: map['description'],
-      status: map['status'],
-      synced: map['synced']
+  static Job fromMap(Map<String, dynamic> m) {
+    return Job(
+      id: m['id'],
+      serverId: m['serverId'],
+      jobNumber: m['jobNumber'],
+      aircraft: m['aircraft'],
+      description: (m['description'] ?? '') as String,
+      status: (m['status'] ?? 'pending') as String,
+      synced: (m['synced'] ?? 0) as int
     );
-    return job;
   }
 }

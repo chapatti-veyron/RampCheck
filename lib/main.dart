@@ -9,23 +9,22 @@ void main() {
     sqfliteFfiInit();
     databaseFactory = databaseFactoryFfi;
   }
-
-  runApp(const RampCheckApp());
+  runApp(const AppRoot());
 }
 
-class RampCheckApp extends StatefulWidget {
-  const RampCheckApp({super.key});
+class AppRoot extends StatefulWidget {
+  const AppRoot({super.key});
 
   @override
-  State<RampCheckApp> createState() => _RampCheckAppState();
+  State<AppRoot> createState() => _AppRootState();
 }
 
-class _RampCheckAppState extends State<RampCheckApp> {
-  bool isLoggedIn = false;
+class _AppRootState extends State<AppRoot> {
+  bool loggedIn = false;
 
-  void onLoginSuccess() {
+  void goIn() {
     setState(() {
-      isLoggedIn = true;
+      loggedIn = true;
     });
   }
 
@@ -34,13 +33,7 @@ class _RampCheckAppState extends State<RampCheckApp> {
     return MaterialApp(
       title: 'RampCheck',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        useMaterial3: false,
-        primarySwatch: Colors.grey
-      ),
-      home: isLoggedIn
-          ? const HomeScreen()
-          : LoginScreen(onLoginSuccess: onLoginSuccess)
+      home: loggedIn ? const HomeScreen() : LoginScreen(onOk: goIn)
     );
   }
 }

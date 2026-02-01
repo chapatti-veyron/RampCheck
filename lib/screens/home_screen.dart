@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/job.dart';
+import '../services/sync_db.dart';
 import '../services/internal_db.dart';
 import 'job_detail_screen.dart';
 
@@ -12,55 +13,53 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   List<Job> jobs = [];
-  bool isLoading = true;
+  bool loading = true;
+  bool syncing = false;
 
   @override
   void initState() {
     super.initState();
-    loadAllJobs();
+    load();
   }
 
-  void loadAllJobs() async {
+  Future<void> load() async {
     setState(() {
-      isLoading = true;
+      loading = true;
     });
 
-    List<Job> allJobs = await DatabaseHelper.getAllJobs();
+    List<Job> list = await DatabaseHelper.getAllJobs();
 
     setState(() {
-      jobs = allJobs;
-      isLoading = false;
+      jobs = list;
+      loading = false;
     });
   }
 
-  String formatStatus(String status) {
-    if (status == 'in_progress') return 'IN PROGRESS';
-    if (status == 'completed') return 'COMPLETED';
+  String s(String v) {
+    if (v == 'in_progress') return 'IN PROGRESS';
+    if (v == 'completed') return 'COMPLETED';
     return 'PENDING';
   }
 
-  Future<void> updateJobStatus(Job job, String newStatus) async {
-    Job updated = Job(
-      id: job.id,
-      jobNumber: job.jobNumber,
-      aircraft: job.aircraft,
-      description: job.description,
-      status: newStatus,
+  Future<void> setStatus(Job j, String v) async {
+    Job x = Job(
+      id: j.id,
+      serverId: j.serverId,
+      jobNumber: j.jobNumber,
+      aircraft: j.aircraft,
+      description: j.description,
+      status: v,
       synced: 0
     );
 
-    await DatabaseHelper.updateJob(updated);
-    loadAllJobs();
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Job status updated to ${formatStatus(newStatus)}'))
-    );
+    await DatabaseHelper.updateJob(x);
+    await load();
   }
 
-  void showAddJobDialog() {
-    final jobNumberController = TextEditingController();
-    final aircraftController = TextEditingController();
-    final descriptionController = TextEditingController();
+  void addDialog() {
+    TextEditingController a = TextEditingController();
+    TextEditingController b = TextEditingController();
+    TextEditingController c = TextEditingController();
 
     showDialog(
       context: context,
@@ -69,60 +68,62 @@ class _HomeScreenState extends State<HomeScreen> {
           title: const Text('New Job'),
           content: SingleChildScrollView(
             child: Column(
-              mainAxisSize: MainAxisSize.min,
               children: [
                 TextField(
-                  controller: jobNumberController,
-                  decoration: const InputDecoration(labelText: 'Job Number')
+                  controller: a,
+                  decoration: const InputDecoration(
+                    labelText: 'Job Number',
+                    border: OutlineInputBorder()
+                  )
                 ),
                 const SizedBox(height: 12),
                 TextField(
-                  controller: aircraftController,
-                  decoration: const InputDecoration(labelText: 'Aircraft Registration')
+                  controller: b,
+                  decoration: const InputDecoration(
+                    labelText: 'Aircraft',
+                    border: OutlineInputBorder()
+                  )
                 ),
                 const SizedBox(height: 12),
                 TextField(
-                  controller: descriptionController,
-                  decoration: const InputDecoration(labelText: 'Description'),
-                  maxLines: 2
+                  controller: c,
+                  maxLines: 2,
+                  decoration: const InputDecoration(
+                    labelText: 'Description',
+                    border: OutlineInputBorder()
+                  )
                 )
               ]
             )
           ),
           actions: [
             TextButton(
-              onPressed: () {
-                Navigator.pop(context);
-              },
+              onPressed: () => Navigator.pop(context),
               child: const Text('Cancel')
             ),
             ElevatedButton(
               onPressed: () async {
-                if (jobNumberController.text.isEmpty) {
+                String jn = a.text.trim();
+                String ac = b.text.trim();
+
+                if (jn.isEmpty || ac.isEmpty) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Job number is required'))
+                    const SnackBar(content: Text('Job number and aircraft are required'))
                   );
                   return;
                 }
 
-                if (aircraftController.text.isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Aircraft is required'))
-                  );
-                  return;
-                }
-
-                Job newJob = Job(
-                  jobNumber: jobNumberController.text,
-                  aircraft: aircraftController.text,
-                  description: descriptionController.text,
+                Job job = Job(
+                  jobNumber: jn,
+                  aircraft: ac,
+                  description: c.text.trim(),
                   status: 'pending',
                   synced: 0
                 );
 
-                await DatabaseHelper.addJob(newJob);
+                await DatabaseHelper.addJob(job);
                 Navigator.pop(context);
-                loadAllJobs();
+                await load();
               },
               child: const Text('Save')
             )
@@ -132,78 +133,60 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  void navigateToJobDetail(Job job) async {
-    await Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => JobDetailScreen(job: job))
-    );
-    loadAllJobs();
-  }
+  Future<void> doSync() async {
+    setState(() {
+      syncing = true;
+    });
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Maintenance Jobs')
-      ),
-      body: buildBody(),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: showAddJobDialog,
-        label: const Text('New Job')
-      )
-    );
-  }
-
-  Widget buildBody() {
-    if (isLoading) {
-      return const Center(child: CircularProgressIndicator());
-    }
-
-    if (jobs.isEmpty) {
-      return const Center(
-        child: Text('No jobs added yet', style: TextStyle(color: Colors.black54))
-      );
-    }
-
-    return ListView.builder(
-      itemCount: jobs.length,
-      itemBuilder: (context, index) {
-        return buildJobCard(jobs[index]);
+    try {
+      await SyncDb.syncUsersAndJobs();
+      await load();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Sync complete'))
+        );
       }
-    );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Sync failed: $e'))
+        );
+      }
+    }
+
+    setState(() {
+      syncing = false;
+    });
   }
 
-  Widget buildStatusBox(String status) {
+  Widget box(String t) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
         border: Border.all(color: Colors.black26),
         color: Colors.white
       ),
-      child: Text(
-        formatStatus(status),
-        style: const TextStyle(fontSize: 12, color: Colors.black87)
-      )
+      child: Text(t, style: const TextStyle(fontSize: 12))
     );
   }
 
-  Widget buildJobCard(Job job) {
-    return Card(
+  Widget card(Job j) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        border: Border.all(color: Colors.black26),
+        color: Colors.white
+      ),
       child: ListTile(
-        title: Text(
-          job.jobNumber,
-          style: const TextStyle(fontWeight: FontWeight.bold)
-        ),
-        subtitle: Text(job.aircraft),
+        title: Text(j.jobNumber, style: const TextStyle(fontWeight: FontWeight.bold)),
+        subtitle: Text(j.aircraft),
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            buildStatusBox(job.status),
+            box(s(j.status)),
             const SizedBox(width: 8),
             PopupMenuButton<String>(
-              onSelected: (value) {
-                updateJobStatus(job, value);
-              },
+              onSelected: (v) => setStatus(j, v),
               itemBuilder: (context) {
                 return const [
                   PopupMenuItem(value: 'pending', child: Text('Set Pending')),
@@ -214,9 +197,40 @@ class _HomeScreenState extends State<HomeScreen> {
             )
           ]
         ),
-        onTap: () {
-          navigateToJobDetail(job);
+        onTap: () async {
+          await Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => JobDetailScreen(job: j))
+          );
+          await load();
         }
+      )
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Jobs'),
+        actions: [
+          TextButton(
+            onPressed: syncing ? null : doSync,
+            child: Text(syncing ? 'Syncing...' : 'Sync', style: const TextStyle(color: Colors.white))
+          )
+        ]
+      ),
+      body: loading
+          ? const Center(child: CircularProgressIndicator())
+          : jobs.isEmpty
+              ? const Center(child: Text('No jobs'))
+              : ListView.builder(
+                  itemCount: jobs.length,
+                  itemBuilder: (context, i) => card(jobs[i])
+                ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: addDialog,
+        label: const Text('New Job')
       )
     );
   }

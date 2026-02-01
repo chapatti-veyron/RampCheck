@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:math';
+import 'package:crypto/crypto.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 import '../models/job.dart';
@@ -8,91 +11,118 @@ class DatabaseHelper {
   static Database? database;
 
   static Future<Database> getDatabase() async {
-    if (database != null) {
-      return database!;
-    }
+    if (database != null) return database!;
 
-    String path = join(await getDatabasesPath(), 'rampcheck.db');
+    String base = await getDatabasesPath();
+    String path = join(base, 'rampcheck.db');
 
     database = await openDatabase(
       path,
-      version: 2,
+      version: 4,
       onCreate: (db, version) async {
+        await db.execute('PRAGMA foreign_keys = ON');
+
         await db.execute('''
-          CREATE TABLE jobs (
+          CREATE TABLE jobs(
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             jobNumber TEXT NOT NULL,
             aircraft TEXT NOT NULL,
             description TEXT,
-            status TEXT NOT NULL,
-            synced INTEGER NOT NULL
+            status TEXT DEFAULT 'pending',
+            synced INTEGER DEFAULT 0,
+            serverId INTEGER,
+            createdAt TEXT NOT NULL
           )
         ''');
 
         await db.execute('''
-          CREATE TABLE inspection_items (
+          CREATE TABLE inspection_items(
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             jobId INTEGER NOT NULL,
             componentName TEXT NOT NULL,
             description TEXT NOT NULL,
-            result TEXT NOT NULL,
+            result TEXT DEFAULT 'NOT_INSPECTED',
             notes TEXT,
-            synced INTEGER NOT NULL
+            synced INTEGER DEFAULT 0,
+            FOREIGN KEY(jobId) REFERENCES jobs(id) ON DELETE CASCADE
           )
         ''');
 
         await db.execute('''
-          CREATE TABLE attachments (
+          CREATE TABLE attachments(
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             inspectionItemId INTEGER NOT NULL,
             fileName TEXT NOT NULL,
             filePath TEXT NOT NULL,
             fileSize INTEGER NOT NULL,
-            synced INTEGER NOT NULL
+            synced INTEGER DEFAULT 0,
+            FOREIGN KEY(inspectionItemId) REFERENCES inspection_items(id) ON DELETE CASCADE
           )
         ''');
 
         await db.execute('''
-          CREATE TABLE users (
+          CREATE TABLE users(
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             username TEXT NOT NULL UNIQUE,
-            password TEXT NOT NULL
+            passwordHash TEXT NOT NULL,
+            salt TEXT NOT NULL
           )
         ''');
 
-        await db.insert('users', {
-          'username': 'user1',
-          'password': 'securepass'
-        });
+        await db.execute('''
+          CREATE TABLE audit_log(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            action TEXT NOT NULL,
+            entity TEXT NOT NULL,
+            entityId INTEGER NOT NULL,
+            timestamp TEXT NOT NULL
+          )
+        ''');
+
+        await _seedUser(db, 'user1', 'securepass');
       },
-      onUpgrade: (db, oldVersion, newVersion) async {
-        if (oldVersion < 2) {
-          await db.execute('''
-            CREATE TABLE IF NOT EXISTS users (
-              id INTEGER PRIMARY KEY AUTOINCREMENT,
-              username TEXT NOT NULL UNIQUE,
-              password TEXT NOT NULL
-            )
-          ''');
-
-          List<Map<String, dynamic>> existing = await db.query(
-            'users',
-            where: 'username = ?',
-            whereArgs: ['user1'],
-            limit: 1
-          );
-
-          if (existing.isEmpty) {
-            await db.insert('users', {
-              'username': 'user1',
-              'password': 'securepass'
-            });
-          }
-        }
+      
+      onOpen: (db) async {
+        await db.execute('PRAGMA foreign_keys = ON');
       }
     );
 
     return database!;
+  }
+
+  static Future<void> _seedUser(Database db, String username, String password) async {
+    final existing = await db.query('users', where: 'username = ?', whereArgs: [username], limit: 1);
+    if (existing.isNotEmpty) return;
+
+    final salt = _makeSalt();
+    final hash = _hashPassword(password, salt);
+
+    await db.insert('users', {
+      'username': username,
+      'passwordHash': hash,
+      'salt': salt
+    });
+  }
+
+  static String _makeSalt() {
+    final r = Random();
+    final bytes = List<int>.generate(16, (_) => r.nextInt(256));
+    return base64Encode(bytes);
+  }
+
+  static String _hashPassword(String password, String salt) {
+    final data = utf8.encode('$salt|$password');
+    return sha256.convert(data).toString();
+  }
+
+  static Future<void> log(String action, String entity, int id) async {
+    final db = await getDatabase();
+    await db.insert('audit_log', {
+      'action': action,
+      'entity': entity,
+      'entityId': id,
+      'timestamp': DateTime.now().toIso8601String()
+    });
   }
 
   static Future<bool> authenticateUser(String username, String password) async {
@@ -100,123 +130,126 @@ class DatabaseHelper {
 
     final rows = await db.query(
       'users',
-      columns: ['id'],
-      where: 'username = ? AND password = ?',
-      whereArgs: [username, password],
+      where: 'username = ?',
+      whereArgs: [username],
       limit: 1
     );
 
-    return rows.isNotEmpty;
+    if (rows.isEmpty) return false;
+
+    final salt = rows[0]['salt'] as String;
+    final storedHash = rows[0]['passwordHash'] as String;
+    final incomingHash = _hashPassword(password, salt);
+
+    return storedHash == incomingHash;
   }
 
-  static Future<int> insertJob(Job job) async {
+  static Future<List<String>> getAllUsernames() async {
     final db = await getDatabase();
-    return await db.insert('jobs', job.toMap());
+    final rows = await db.query('users', columns: ['username'], orderBy: 'username ASC');
+    List<String> out = [];
+    for (final r in rows) {
+      out.add(r['username'] as String);
+    }
+    return out;
   }
 
   static Future<int> addJob(Job job) async {
-    return insertJob(job);
+    final db = await getDatabase();
+    final map = job.toMap();
+    map['createdAt'] = DateTime.now().toIso8601String();
+
+    final id = await db.insert('jobs', map);
+    await log('ADD', 'job', id);
+    return id;
+  }
+
+  static Future<void> updateJob(Job job) async {
+    final db = await getDatabase();
+    await db.update('jobs', job.toMap(), where: 'id = ?', whereArgs: [job.id]);
+    await log('UPDATE', 'job', job.id!);
   }
 
   static Future<List<Job>> getAllJobs() async {
     final db = await getDatabase();
-    final List<Map<String, dynamic>> maps = await db.query('jobs', orderBy: 'id DESC');
-
-    return List.generate(maps.length, (i) {
-      return Job.fromMap(maps[i]);
-    });
+    final maps = await db.query('jobs', orderBy: 'id DESC');
+    return maps.map((m) => Job.fromMap(m)).toList();
   }
 
-  static Future<int> updateJob(Job job) async {
+  static Future<List<Job>> getUnsyncedJobs() async {
     final db = await getDatabase();
-    return await db.update(
+    final maps = await db.query('jobs', where: 'synced = ?', whereArgs: [0], orderBy: 'id ASC');
+    return maps.map((m) => Job.fromMap(m)).toList();
+  }
+
+  static Future<void> markJobSynced(int localId, int serverId) async {
+    final db = await getDatabase();
+    await db.update(
       'jobs',
-      job.toMap(),
+      {'synced': 1, 'serverId': serverId},
       where: 'id = ?',
-      whereArgs: [job.id]
+      whereArgs: [localId]
     );
-  }
-
-  static Future<int> deleteJob(int id) async {
-    final db = await getDatabase();
-    return await db.delete(
-      'jobs',
-      where: 'id = ?',
-      whereArgs: [id]
-    );
-  }
-
-  static Future<int> insertInspectionItem(InspectionItem item) async {
-    final db = await getDatabase();
-    return await db.insert('inspection_items', item.toMap());
+    await log('UPDATE', 'job', localId);
   }
 
   static Future<int> addInspectionItem(InspectionItem item) async {
-    return insertInspectionItem(item);
+    final db = await getDatabase();
+    final id = await db.insert('inspection_items', item.toMap());
+    await log('ADD', 'inspection_item', id);
+    return id;
+  }
+
+  static Future<void> updateInspectionItem(InspectionItem item) async {
+    final db = await getDatabase();
+    await db.update('inspection_items', item.toMap(), where: 'id = ?', whereArgs: [item.id]);
+    await log('UPDATE', 'inspection_item', item.id!);
   }
 
   static Future<List<InspectionItem>> getInspectionItemsForJob(int jobId) async {
     final db = await getDatabase();
-    final List<Map<String, dynamic>> maps = await db.query(
-      'inspection_items',
-      where: 'jobId = ?',
-      whereArgs: [jobId],
-      orderBy: 'componentName ASC'
-    );
-
-    return List.generate(maps.length, (i) {
-      return InspectionItem.fromMap(maps[i]);
-    });
+    final maps = await db.query('inspection_items', where: 'jobId = ?', whereArgs: [jobId], orderBy: 'componentName ASC');
+    return maps.map((m) => InspectionItem.fromMap(m)).toList();
   }
 
-  static Future<int> updateInspectionItem(InspectionItem item) async {
+  static Future<int> addAttachment(Attachment a) async {
     final db = await getDatabase();
-    return await db.update(
-      'inspection_items',
-      item.toMap(),
-      where: 'id = ?',
-      whereArgs: [item.id]
-    );
+    final id = await db.insert('attachments', a.toMap());
+    await log('ADD', 'attachment', id);
+    return id;
   }
 
-  static Future<int> deleteInspectionItem(int id) async {
+  static Future<void> deleteAttachment(int id) async {
     final db = await getDatabase();
-    return await db.delete(
-      'inspection_items',
-      where: 'id = ?',
-      whereArgs: [id]
-    );
-  }
-
-  static Future<int> insertAttachment(Attachment attachment) async {
-    final db = await getDatabase();
-    return await db.insert('attachments', attachment.toMap());
-  }
-
-  static Future<int> addAttachment(Attachment attachment) async {
-    return insertAttachment(attachment);
+    await db.delete('attachments', where: 'id = ?', whereArgs: [id]);
+    await log('DELETE', 'attachment', id);
   }
 
   static Future<List<Attachment>> getAttachmentsForInspectionItem(int inspectionItemId) async {
     final db = await getDatabase();
-    final List<Map<String, dynamic>> maps = await db.query(
+    final maps = await db.query(
       'attachments',
       where: 'inspectionItemId = ?',
       whereArgs: [inspectionItemId],
-      orderBy: 'id DESC'
+      orderBy: 'id ASC'
     );
-
-    return List.generate(maps.length, (i) {
-      return Attachment.fromMap(maps[i]);
-    });
+    return maps.map((m) => Attachment.fromMap(m)).toList();
   }
 
-  static Future<int> deleteAttachment(int id) async {
+  static Future<int> runRetention() async {
     final db = await getDatabase();
-    return await db.delete(
-      'attachments',
-      where: 'id = ?',
-      whereArgs: [id]
+    final cutoff = DateTime.now().subtract(const Duration(days: 30)).toIso8601String();
+
+    final deleted = await db.delete(
+      'jobs',
+      where: 'status = ? AND createdAt < ?',
+      whereArgs: ['completed', cutoff]
     );
+
+    if (deleted > 0) {
+      await log('RETENTION', 'job', deleted);
+    }
+
+    return deleted;
   }
 }

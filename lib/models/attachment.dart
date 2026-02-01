@@ -16,25 +16,24 @@ class Attachment {
   });
 
   Map<String, dynamic> toMap() {
-    Map<String, dynamic> map = {};
-    map['id'] = id;
-    map['inspectionItemId'] = inspectionItemId;
-    map['fileName'] = fileName;
-    map['filePath'] = filePath;
-    map['fileSize'] = fileSize;
-    map['synced'] = synced;
-    return map;
+    Map<String, dynamic> m = {};
+    m['id'] = id;
+    m['inspectionItemId'] = inspectionItemId;
+    m['fileName'] = fileName;
+    m['filePath'] = filePath;
+    m['fileSize'] = fileSize;
+    m['synced'] = synced;
+    return m;
   }
 
-  static Attachment fromMap(Map<String, dynamic> map) {
-    Attachment attachment = Attachment(
-      id: map['id'],
-      inspectionItemId: map['inspectionItemId'],
-      fileName: map['fileName'],
-      filePath: map['filePath'],
-      fileSize: map['fileSize'],
-      synced: map['synced']
+  static Attachment fromMap(Map<String, dynamic> m) {
+    return Attachment(
+      id: m['id'],
+      inspectionItemId: m['inspectionItemId'],
+      fileName: m['fileName'],
+      filePath: m['filePath'],
+      fileSize: m['fileSize'],
+      synced: (m['synced'] ?? 0) as int
     );
-    return attachment;
   }
 }
