@@ -30,8 +30,7 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
       loading = true;
     });
 
-    int? id = widget.job.id;
-    if (id == null) {
+    if (widget.job.id == null) {
       setState(() {
         items = [];
         loading = false;
@@ -39,7 +38,7 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
       return;
     }
 
-    List<InspectionItem> list = await DatabaseHelper.getInspectionItemsForJob(id);
+    List<InspectionItem> list = await DatabaseHelper.getInspectionItemsForJob(widget.job.id!);
 
     setState(() {
       items = list;
@@ -47,37 +46,20 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
     });
   }
 
-  String s(String v) {
-    if (v == 'NOT_INSPECTED') return 'NOT INSPECTED';
-    if (v == 'N_A') return 'N/A';
-    return v;
-  }
-
-  Widget box(String t) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        border: Border.all(color: Colors.black26),
-        color: Colors.white
-      ),
-      child: Text(t, style: const TextStyle(fontSize: 12))
-    );
-  }
-
   void addItemDialog() {
-    TextEditingController a = TextEditingController();
-    TextEditingController b = TextEditingController();
+    TextEditingController comp = TextEditingController();
+    TextEditingController desc = TextEditingController();
 
     showDialog(
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: const Text('New Item'),
+          title: const Text('New Inspection Item'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               TextField(
-                controller: a,
+                controller: comp,
                 decoration: const InputDecoration(
                   labelText: 'Component',
                   border: OutlineInputBorder()
@@ -85,7 +67,7 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
               ),
               const SizedBox(height: 12),
               TextField(
-                controller: b,
+                controller: desc,
                 maxLines: 2,
                 decoration: const InputDecoration(
                   labelText: 'Description',
@@ -103,24 +85,24 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
               onPressed: () async {
                 if (widget.job.id == null) return;
 
-                String name = a.text.trim();
+                String name = comp.text.trim();
                 if (name.isEmpty) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Component is required'))
+                    const SnackBar(content: Text('Component required'))
                   );
                   return;
                 }
 
-                InspectionItem x = InspectionItem(
+                InspectionItem item = InspectionItem(
                   jobId: widget.job.id!,
                   componentName: name,
-                  description: b.text.trim(),
+                  description: desc.text.trim(),
                   result: 'NOT_INSPECTED',
                   notes: '',
                   synced: 0
                 );
 
-                await DatabaseHelper.addInspectionItem(x);
+                await DatabaseHelper.addInspectionItem(item);
                 Navigator.pop(context);
                 await load();
               },
@@ -136,18 +118,18 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
     if (item.id == null) return;
 
     TextEditingController notes = TextEditingController(text: item.notes);
-    String res = item.result;
-    List<Attachment> atts = await DatabaseHelper.getAttachmentsForInspectionItem(item.id!);
+    String result = item.result;
+    List<Attachment> attachments = await DatabaseHelper.getAttachmentsForInspectionItem(item.id!);
 
     showDialog(
       context: context,
       builder: (context) {
         return StatefulBuilder(
-          builder: (context, setD) {
-            Future<void> refresh() async {
+          builder: (context, setDialogState) {
+            Future<void> refreshAttachments() async {
               List<Attachment> newList = await DatabaseHelper.getAttachmentsForInspectionItem(item.id!);
-              setD(() {
-                atts = newList;
+              setDialogState(() {
+                attachments = newList;
               });
             }
 
@@ -156,28 +138,26 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
               content: SingleChildScrollView(
                 child: Column(
                   children: [
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text(item.description, style: const TextStyle(fontWeight: FontWeight.bold))
-                    ),
+                    Text(item.description),
                     const SizedBox(height: 12),
                     DropdownButtonFormField<String>(
-                      initialValue: res,
+                      value: result,
                       decoration: const InputDecoration(
                         labelText: 'Result',
                         border: OutlineInputBorder()
                       ),
                       items: const [
-                        DropdownMenuItem(value: 'NOT_INSPECTED', child: Text('Not inspected')),
+                        DropdownMenuItem(value: 'NOT_INSPECTED', child: Text('Not Inspected')),
                         DropdownMenuItem(value: 'PASS', child: Text('Pass')),
                         DropdownMenuItem(value: 'FAIL', child: Text('Fail')),
                         DropdownMenuItem(value: 'N_A', child: Text('N/A'))
                       ],
                       onChanged: (v) {
-                        if (v == null) return;
-                        setD(() {
-                          res = v;
-                        });
+                        if (v != null) {
+                          setDialogState(() {
+                            result = v;
+                          });
+                        }
                       }
                     ),
                     const SizedBox(height: 12),
@@ -190,79 +170,52 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
                       )
                     ),
                     const SizedBox(height: 12),
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text('Attachments (${atts.length})', style: const TextStyle(fontWeight: FontWeight.bold))
-                    ),
+                    Text('Attachments: ${attachments.length}'),
                     const SizedBox(height: 8),
-                    if (atts.isEmpty)
-                      const Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text('No attachments', style: TextStyle(color: Colors.black54))
-                      )
+                    if (attachments.isEmpty)
+                      const Text('No attachments')
                     else
                       Column(
-                        children: atts.map((a) {
-                          return Container(
-                            margin: const EdgeInsets.only(bottom: 6),
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                            decoration: BoxDecoration(
-                              border: Border.all(color: Colors.black26),
-                              color: Colors.white
-                            ),
-                            child: Row(
-                              children: [
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(a.fileName, style: const TextStyle(fontSize: 12)),
-                                      const SizedBox(height: 2),
-                                      Text('${(a.fileSize / 1024).toStringAsFixed(1)} KB', style: const TextStyle(fontSize: 11, color: Colors.black54))
-                                    ]
-                                  )
-                                ),
-                                TextButton(
-                                  onPressed: () async {
-                                    if (a.id == null) return;
-                                    await DatabaseHelper.deleteAttachment(a.id!);
-                                    await refresh();
-                                  },
-                                  child: const Text('Remove')
-                                )
-                              ]
+                        children: attachments.map((a) {
+                          return ListTile(
+                            title: Text(a.fileName),
+                            subtitle: Text('${(a.fileSize / 1024).toStringAsFixed(1)} KB'),
+                            trailing: IconButton(
+                              icon: const Icon(Icons.delete),
+                              onPressed: () async {
+                                if (a.id != null) {
+                                  await DatabaseHelper.deleteAttachment(a.id!);
+                                  await refreshAttachments();
+                                }
+                              }
                             )
                           );
                         }).toList()
                       ),
                     const SizedBox(height: 8),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: () async {
-                          FilePickerResult? r = await FilePicker.platform.pickFiles(allowMultiple: false);
-                          if (r == null) return;
-                          if (r.files.isEmpty) return;
-                          if (r.files.single.path == null) return;
+                    ElevatedButton(
+                      onPressed: () async {
+                        FilePickerResult? r = await FilePicker.platform.pickFiles();
+                        if (r == null) return;
+                        if (r.files.isEmpty) return;
+                        if (r.files.single.path == null) return;
 
-                          String path = r.files.single.path!;
-                          File f = File(path);
-                          int size = await f.length();
-                          String name = r.files.single.name;
+                        String path = r.files.single.path!;
+                        File f = File(path);
+                        int size = await f.length();
 
-                          Attachment n = Attachment(
-                            inspectionItemId: item.id!,
-                            fileName: name,
-                            filePath: path,
-                            fileSize: size,
-                            synced: 0
-                          );
+                        Attachment newAtt = Attachment(
+                          inspectionItemId: item.id!,
+                          fileName: r.files.single.name,
+                          filePath: path,
+                          fileSize: size,
+                          synced: 0
+                        );
 
-                          await DatabaseHelper.addAttachment(n);
-                          await refresh();
-                        },
-                        child: const Text('Add Attachment')
-                      )
+                        await DatabaseHelper.addAttachment(newAtt);
+                        await refreshAttachments();
+                      },
+                      child: const Text('Add Attachment')
                     )
                   ]
                 )
@@ -274,17 +227,17 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
                 ),
                 ElevatedButton(
                   onPressed: () async {
-                    InspectionItem up = InspectionItem(
+                    InspectionItem updated = InspectionItem(
                       id: item.id,
                       jobId: item.jobId,
                       componentName: item.componentName,
                       description: item.description,
-                      result: res,
+                      result: result,
                       notes: notes.text,
                       synced: 0
                     );
 
-                    await DatabaseHelper.updateInspectionItem(up);
+                    await DatabaseHelper.updateInspectionItem(updated);
                     Navigator.pop(context);
                     await load();
                   },
@@ -302,7 +255,8 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.job.jobNumber)
+        title: Text(widget.job.jobNumber),
+        backgroundColor: Colors.blue,
       ),
       body: Column(
         children: [
@@ -320,12 +274,7 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
                 const SizedBox(height: 6),
                 Text(widget.job.description.isEmpty ? 'No description' : widget.job.description),
                 const SizedBox(height: 12),
-                Row(
-                  children: [
-                    const Text('Status: '),
-                    box(s(widget.job.status))
-                  ]
-                )
+                Text('Status: ${widget.job.status.toUpperCase()}')
               ]
             )
           ),
@@ -336,7 +285,7 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
               children: [
                 const Text('Inspection Items', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                 const Spacer(),
-                Text('${items.length}', style: const TextStyle(color: Colors.black54))
+                Text('${items.length}')
               ]
             )
           ),
@@ -344,7 +293,7 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
             child: loading
                 ? const Center(child: CircularProgressIndicator())
                 : items.isEmpty
-                    ? const Center(child: Text('No items', style: TextStyle(color: Colors.black54)))
+                    ? const Center(child: Text('No items'))
                     : ListView.builder(
                         itemCount: items.length,
                         itemBuilder: (context, i) {
@@ -356,15 +305,9 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
                               color: Colors.white
                             ),
                             child: ListTile(
-                              title: Text(it.componentName, style: const TextStyle(fontWeight: FontWeight.bold)),
-                              subtitle: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(it.description),
-                                  if (it.notes.isNotEmpty) Text('Notes: ${it.notes}')
-                                ]
-                              ),
-                              trailing: box(s(it.result)),
+                              title: Text(it.componentName),
+                              subtitle: Text(it.description),
+                              trailing: Text(it.result),
                               onTap: () => editDialog(it)
                             )
                           );

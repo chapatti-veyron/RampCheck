@@ -35,12 +35,6 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
-  String s(String v) {
-    if (v == 'in_progress') return 'IN PROGRESS';
-    if (v == 'completed') return 'COMPLETED';
-    return 'PENDING';
-  }
-
   Future<void> setStatus(Job j, String v) async {
     Job x = Job(
       id: j.id,
@@ -57,9 +51,9 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void addDialog() {
-    TextEditingController a = TextEditingController();
-    TextEditingController b = TextEditingController();
-    TextEditingController c = TextEditingController();
+    TextEditingController jobNum = TextEditingController();
+    TextEditingController aircraft = TextEditingController();
+    TextEditingController desc = TextEditingController();
 
     showDialog(
       context: context,
@@ -70,7 +64,7 @@ class _HomeScreenState extends State<HomeScreen> {
             child: Column(
               children: [
                 TextField(
-                  controller: a,
+                  controller: jobNum,
                   decoration: const InputDecoration(
                     labelText: 'Job Number',
                     border: OutlineInputBorder()
@@ -78,7 +72,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
                 const SizedBox(height: 12),
                 TextField(
-                  controller: b,
+                  controller: aircraft,
                   decoration: const InputDecoration(
                     labelText: 'Aircraft',
                     border: OutlineInputBorder()
@@ -86,7 +80,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
                 const SizedBox(height: 12),
                 TextField(
-                  controller: c,
+                  controller: desc,
                   maxLines: 2,
                   decoration: const InputDecoration(
                     labelText: 'Description',
@@ -103,12 +97,12 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             ElevatedButton(
               onPressed: () async {
-                String jn = a.text.trim();
-                String ac = b.text.trim();
+                String jn = jobNum.text.trim();
+                String ac = aircraft.text.trim();
 
                 if (jn.isEmpty || ac.isEmpty) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Job number and aircraft are required'))
+                    const SnackBar(content: Text('Job number and aircraft required'))
                   );
                   return;
                 }
@@ -116,7 +110,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 Job job = Job(
                   jobNumber: jn,
                   aircraft: ac,
-                  description: c.text.trim(),
+                  description: desc.text.trim(),
                   status: 'pending',
                   synced: 0
                 );
@@ -149,7 +143,7 @@ class _HomeScreenState extends State<HomeScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Sync failed: $e'))
+          SnackBar(content: Text('Sync failed'))
         );
       }
     }
@@ -159,52 +153,63 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
-  Widget box(String t) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        border: Border.all(color: Colors.black26),
-        color: Colors.white
-      ),
-      child: Text(t, style: const TextStyle(fontSize: 12))
-    );
-  }
-
   Widget card(Job j) {
+    Icon syncIcon;
+    if (j.synced == 1) {
+      syncIcon = const Icon(Icons.cloud_done, size: 20, color: Colors.green);
+    } else {
+      syncIcon = const Icon(Icons.cloud_off, size: 20, color: Colors.orange);
+    }
+
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
         border: Border.all(color: Colors.black26),
         color: Colors.white
       ),
-      child: ListTile(
-        title: Text(j.jobNumber, style: const TextStyle(fontWeight: FontWeight.bold)),
-        subtitle: Text(j.aircraft),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            box(s(j.status)),
-            const SizedBox(width: 8),
-            PopupMenuButton<String>(
-              onSelected: (v) => setStatus(j, v),
-              itemBuilder: (context) {
-                return const [
-                  PopupMenuItem(value: 'pending', child: Text('Set Pending')),
-                  PopupMenuItem(value: 'in_progress', child: Text('Set In Progress')),
-                  PopupMenuItem(value: 'completed', child: Text('Set Completed'))
-                ];
-              }
-            )
-          ]
-        ),
-        onTap: () async {
-          await Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => JobDetailScreen(job: j))
-          );
-          await load();
-        }
-      )
+      child: Column(
+        children: [
+          ListTile(
+            leading: syncIcon,
+            title: Text(j.jobNumber, style: const TextStyle(fontWeight: FontWeight.bold)),
+            subtitle: Text('${j.aircraft} - ${j.status.toUpperCase()}'),
+            onTap: () async {
+              await Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => JobDetailScreen(job: j))
+              );
+              await load();
+            }
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => setStatus(j, 'pending'),
+                    child: const Text('Pending', style: TextStyle(fontSize: 12)),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => setStatus(j, 'in_progress'),
+                    child: const Text('In Progress', style: TextStyle(fontSize: 12)),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => setStatus(j, 'completed'),
+                    child: const Text('Completed', style: TextStyle(fontSize: 12)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -213,10 +218,12 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Jobs'),
+        backgroundColor: Colors.blue,
         actions: [
-          TextButton(
+          IconButton(
             onPressed: syncing ? null : doSync,
-            child: Text(syncing ? 'Syncing...' : 'Sync', style: const TextStyle(color: Colors.white))
+            icon: const Icon(Icons.sync),
+            color: Colors.white,
           )
         ]
       ),

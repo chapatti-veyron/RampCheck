@@ -11,32 +11,32 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final TextEditingController u = TextEditingController();
-  final TextEditingController p = TextEditingController();
+  final TextEditingController username = TextEditingController();
+  final TextEditingController password = TextEditingController();
 
   bool busy = false;
-  String msg = '';
+  String errorMsg = '';
 
   @override
   void dispose() {
-    u.dispose();
-    p.dispose();
+    username.dispose();
+    password.dispose();
     super.dispose();
   }
 
   Future<void> doLogin() async {
     setState(() {
       busy = true;
-      msg = '';
+      errorMsg = '';
     });
 
-    String user = u.text.trim();
-    String pass = p.text;
+    String user = username.text.trim();
+    String pass = password.text;
 
     if (user.isEmpty || pass.isEmpty) {
       setState(() {
         busy = false;
-        msg = 'Enter username and password';
+        errorMsg = 'Enter username and password';
       });
       return;
     }
@@ -50,7 +50,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
     setState(() {
       busy = false;
-      msg = 'Login failed';
+      errorMsg = 'Login failed';
     });
   }
 
@@ -58,27 +58,25 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Login')
+        title: const Text('Login'),
+        backgroundColor: Colors.blue,
       ),
       body: Center(
         child: SizedBox(
-          width: 420,
+          width: 400,
           child: Card(
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      'Maintenance Tool',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)
-                    )
+                  const Text(
+                    'RampCheck',
+                    style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 24),
                   TextField(
-                    controller: u,
+                    controller: username,
                     decoration: const InputDecoration(
                       labelText: 'Username',
                       border: OutlineInputBorder()
@@ -86,7 +84,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   const SizedBox(height: 12),
                   TextField(
-                    controller: p,
+                    controller: password,
                     obscureText: true,
                     decoration: const InputDecoration(
                       labelText: 'Password',
@@ -95,17 +93,14 @@ class _LoginScreenState extends State<LoginScreen> {
                     onSubmitted: (_) => doLogin()
                   ),
                   const SizedBox(height: 12),
-                  if (msg.isNotEmpty)
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text(msg, style: const TextStyle(color: Colors.red))
-                    ),
+                  if (errorMsg.isNotEmpty)
+                    Text(errorMsg, style: const TextStyle(color: Colors.red)),
                   const SizedBox(height: 16),
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
                       onPressed: busy ? null : doLogin,
-                      child: Text(busy ? 'Checking...' : 'Enter')
+                      child: const Text('Login')
                     )
                   )
                 ]

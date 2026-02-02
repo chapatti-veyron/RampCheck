@@ -14,13 +14,39 @@ void main() {
     databaseFactory = databaseFactoryFfi;
   });
 
-  test('load jobs under 300ms', () async {
+  test('UT-001: Verify audit log entry added with ADD and JOB parameters', () async {
+    await DatabaseHelper.getDatabase();
+
+    final sw = Stopwatch()..start();
+    
+    await DatabaseHelper.addJob(Job(
+      jobNumber: 'testnum',
+      aircraft: 'testcraft',
+      description: 'Test audit logging',
+      status: 'pending',
+      synced: 0
+    ));
+
+    sw.stop();
+
+    final db = await DatabaseHelper.getDatabase();
+    final auditEntries = await db.query(
+      'audit_log',
+      where: 'action = ? AND entity = ?',
+      whereArgs: ['ADD', 'job']
+    );
+
+    expect(auditEntries.isNotEmpty, true);
+    expect(sw.elapsedMilliseconds < 300, true);
+  });
+
+  test('UT-002: Verify UI response time under 300ms', () async {
     await DatabaseHelper.getDatabase();
 
     await DatabaseHelper.addJob(Job(
-      jobNumber: 'J-FAST',
-      aircraft: 'A-FAST',
-      description: '',
+      jobNumber: 'testnum',
+      aircraft: 'testcraft',
+      description: 'Test audit logging',
       status: 'pending',
       synced: 0
     ));
@@ -32,13 +58,13 @@ void main() {
     expect(sw.elapsedMilliseconds < 300, true);
   });
 
-  test('sync finishes within 120 seconds', () async {
+  test('UT-003: Verify server sync under 120s', () async {
     await DatabaseHelper.getDatabase();
 
     await DatabaseHelper.addJob(Job(
-      jobNumber: 'J-1',
-      aircraft: 'A1',
-      description: 'd',
+      jobNumber: 'testnum',
+      aircraft: 'testcraft',
+      description: 'Test audit logging',
       status: 'pending',
       synced: 0
     ));
@@ -59,6 +85,14 @@ void main() {
     sw.stop();
 
     expect(sw.elapsed.inSeconds < 120, true);
-  });
+    
+    final db = await DatabaseHelper.getDatabase();
+    final syncedJobs = await db.query(
+      'jobs',
+      where: 'synced = ? AND serverId IS NOT NULL',
+      whereArgs: [1]
+    );
 
+    expect(syncedJobs.isNotEmpty, true);
+  });
 }

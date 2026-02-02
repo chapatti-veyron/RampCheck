@@ -6,7 +6,7 @@ import '../models/job.dart';
 class SyncDb {
   static const String apiKey = 'api_warehouse_student_key_1234567890abcdef';
 
-  static Map<String, String> h() {
+  static Map<String, String> getHeaders() {
     return {
       'Content-Type': 'application/json',
       'X-API-Key': apiKey
@@ -17,13 +17,14 @@ class SyncDb {
     http.Client? client,
     String baseUrl = 'http://localhost:5000'
   }) async {
-    final c = client ?? http.Client();
+    final httpClient = client ?? http.Client();
+    
     try {
-      await syncUsers(client: c, baseUrl: baseUrl).timeout(const Duration(seconds: 120));
-      await syncJobs(client: c, baseUrl: baseUrl).timeout(const Duration(seconds: 120));
+      await syncUsers(client: httpClient, baseUrl: baseUrl);
+      await syncJobs(client: httpClient, baseUrl: baseUrl);
     } finally {
       if (client == null) {
-        c.close();
+        httpClient.close();
       }
     }
   }
@@ -32,16 +33,16 @@ class SyncDb {
     required http.Client client,
     required String baseUrl
   }) async {
-    List<String> names = await DatabaseHelper.getAllUsernames();
+    List<String> usernames = await DatabaseHelper.getAllUsernames();
 
     final response = await client.post(
       Uri.parse('$baseUrl/sync/users'),
-      headers: h(),
-      body: jsonEncode({'users': names})
+      headers: getHeaders(),
+      body: jsonEncode({'users': usernames})
     );
 
     if (response.statusCode != 200) {
-      throw 'users ${response.statusCode}';
+      throw Exception('User sync failed: ${response.statusCode}');
     }
   }
 
@@ -49,26 +50,26 @@ class SyncDb {
     required http.Client client,
     required String baseUrl
   }) async {
-    List<Job> list = await DatabaseHelper.getUnsyncedJobs();
+    List<Job> unsyncedJobs = await DatabaseHelper.getUnsyncedJobs();
 
-    for (final j in list) {
-      final res = await client.post(
+    for (final job in unsyncedJobs) {
+      final response = await client.post(
         Uri.parse('$baseUrl/sync/jobs'),
-        headers: h(),
+        headers: getHeaders(),
         body: jsonEncode({
-          'jobNumber': j.jobNumber,
-          'aircraft': j.aircraft,
-          'description': j.description,
-          'status': j.status
+          'jobNumber': job.jobNumber,
+          'aircraft': job.aircraft,
+          'description': job.description,
+          'status': job.status
         })
       );
 
-      if (res.statusCode == 200 || res.statusCode == 201) {
-        final data = jsonDecode(res.body) as Map<String, dynamic>;
-        int sid = data['id'] as int;
-        await DatabaseHelper.markJobSynced(j.id!, sid);
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        int serverId = data['id'] as int;
+        await DatabaseHelper.markJobSynced(job.id!, serverId);
       } else {
-        throw 'jobs ${res.statusCode}';
+        throw Exception('Job sync failed: ${response.statusCode}');
       }
     }
   }
