@@ -33,7 +33,7 @@ class SyncDb {
     required http.Client client,
     required String baseUrl
   }) async {
-    List<String> usernames = await DatabaseHelper.getAllUsernames();
+    List<String> usernames = await InternalDB.getAllUsernames();
 
     final response = await client.post(
       Uri.parse('$baseUrl/sync/users'),
@@ -50,7 +50,7 @@ class SyncDb {
     required http.Client client,
     required String baseUrl
   }) async {
-    List<Job> unsyncedJobs = await DatabaseHelper.getUnsyncedJobs();
+    List<Job> unsyncedJobs = await InternalDB.getUnsyncedJobs();
 
     for (final job in unsyncedJobs) {
       final response = await client.post(
@@ -67,7 +67,7 @@ class SyncDb {
       if (response.statusCode == 200 || response.statusCode == 201) {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
         int serverId = data['id'] as int;
-        await DatabaseHelper.markJobSynced(job.id!, serverId);
+        await InternalDB.markJobSynced(job.id!, serverId);
       } else {
         throw Exception('Job sync failed: ${response.statusCode}');
       }

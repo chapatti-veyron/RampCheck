@@ -7,7 +7,7 @@ import '../models/job.dart';
 import '../models/inspection_item.dart';
 import '../models/attachment.dart';
 
-class DatabaseHelper {
+class InternalDB {
   static Database? database;
 
   static Future<Database> getDatabase() async {

@@ -38,7 +38,7 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
       return;
     }
 
-    List<InspectionItem> list = await DatabaseHelper.getInspectionItemsForJob(widget.job.id!);
+    List<InspectionItem> list = await InternalDB.getInspectionItemsForJob(widget.job.id!);
 
     setState(() {
       items = list;
@@ -102,7 +102,7 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
                   synced: 0
                 );
 
-                await DatabaseHelper.addInspectionItem(item);
+                await InternalDB.addInspectionItem(item);
                 Navigator.pop(context);
                 await load();
               },
@@ -119,7 +119,7 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
 
     TextEditingController notes = TextEditingController(text: item.notes);
     String result = item.result;
-    List<Attachment> attachments = await DatabaseHelper.getAttachmentsForInspectionItem(item.id!);
+    List<Attachment> attachments = await InternalDB.getAttachmentsForInspectionItem(item.id!);
 
     showDialog(
       context: context,
@@ -127,7 +127,7 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
         return StatefulBuilder(
           builder: (context, setDialogState) {
             Future<void> refreshAttachments() async {
-              List<Attachment> newList = await DatabaseHelper.getAttachmentsForInspectionItem(item.id!);
+              List<Attachment> newList = await InternalDB.getAttachmentsForInspectionItem(item.id!);
               setDialogState(() {
                 attachments = newList;
               });
@@ -184,7 +184,7 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
                               icon: const Icon(Icons.delete),
                               onPressed: () async {
                                 if (a.id != null) {
-                                  await DatabaseHelper.deleteAttachment(a.id!);
+                                  await InternalDB.deleteAttachment(a.id!);
                                   await refreshAttachments();
                                 }
                               }
@@ -212,7 +212,7 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
                           synced: 0
                         );
 
-                        await DatabaseHelper.addAttachment(newAtt);
+                        await InternalDB.addAttachment(newAtt);
                         await refreshAttachments();
                       },
                       child: const Text('Add Attachment')
@@ -237,7 +237,7 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
                       synced: 0
                     );
 
-                    await DatabaseHelper.updateInspectionItem(updated);
+                    await InternalDB.updateInspectionItem(updated);
                     Navigator.pop(context);
                     await load();
                   },

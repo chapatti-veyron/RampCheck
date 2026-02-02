@@ -27,7 +27,7 @@ class _HomeScreenState extends State<HomeScreen> {
       loading = true;
     });
 
-    List<Job> list = await DatabaseHelper.getAllJobs();
+    List<Job> list = await InternalDB.getAllJobs();
 
     setState(() {
       jobs = list;
@@ -46,7 +46,7 @@ class _HomeScreenState extends State<HomeScreen> {
       synced: 0
     );
 
-    await DatabaseHelper.updateJob(x);
+    await InternalDB.updateJob(x);
     await load();
   }
 
@@ -115,7 +115,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   synced: 0
                 );
 
-                await DatabaseHelper.addJob(job);
+                await InternalDB.addJob(job);
                 Navigator.pop(context);
                 await load();
               },

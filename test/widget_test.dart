@@ -15,11 +15,11 @@ void main() {
   });
 
   test('UT-001: Verify audit log entry added with ADD and JOB parameters', () async {
-    await DatabaseHelper.getDatabase();
+    await InternalDB.getDatabase();
 
     final sw = Stopwatch()..start();
     
-    await DatabaseHelper.addJob(Job(
+    await InternalDB.addJob(Job(
       jobNumber: 'testnum',
       aircraft: 'testcraft',
       description: 'Test audit logging',
@@ -29,7 +29,7 @@ void main() {
 
     sw.stop();
 
-    final db = await DatabaseHelper.getDatabase();
+    final db = await InternalDB.getDatabase();
     final auditEntries = await db.query(
       'audit_log',
       where: 'action = ? AND entity = ?',
@@ -41,9 +41,9 @@ void main() {
   });
 
   test('UT-002: Verify UI response time under 300ms', () async {
-    await DatabaseHelper.getDatabase();
+    await InternalDB.getDatabase();
 
-    await DatabaseHelper.addJob(Job(
+    await InternalDB.addJob(Job(
       jobNumber: 'testnum',
       aircraft: 'testcraft',
       description: 'Test audit logging',
@@ -52,16 +52,16 @@ void main() {
     ));
 
     final sw = Stopwatch()..start();
-    await DatabaseHelper.getAllJobs();
+    await InternalDB.getAllJobs();
     sw.stop();
 
     expect(sw.elapsedMilliseconds < 300, true);
   });
 
   test('UT-003: Verify server sync under 120s', () async {
-    await DatabaseHelper.getDatabase();
+    await InternalDB.getDatabase();
 
-    await DatabaseHelper.addJob(Job(
+    await InternalDB.addJob(Job(
       jobNumber: 'testnum',
       aircraft: 'testcraft',
       description: 'Test audit logging',
@@ -86,7 +86,7 @@ void main() {
 
     expect(sw.elapsed.inSeconds < 120, true);
     
-    final db = await DatabaseHelper.getDatabase();
+    final db = await InternalDB.getDatabase();
     final syncedJobs = await db.query(
       'jobs',
       where: 'synced = ? AND serverId IS NOT NULL',

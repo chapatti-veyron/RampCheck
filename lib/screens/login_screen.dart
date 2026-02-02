@@ -41,7 +41,7 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
 
-    bool ok = await DatabaseHelper.authenticateUser(user, pass);
+    bool ok = await InternalDB.authenticateUser(user, pass);
 
     if (ok) {
       widget.onOk();
