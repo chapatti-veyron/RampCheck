@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'dart:io';
-import 'package:file_picker/file_picker.dart';
+import 'package:file_selector/file_selector.dart';
 import '../models/job.dart';
 import '../models/inspection_item.dart';
 import '../models/attachment.dart';
@@ -195,24 +195,25 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
                     const SizedBox(height: 8),
                     ElevatedButton(
                       onPressed: () async {
-                        FilePickerResult? r = await FilePicker.platform.pickFiles();
-                        if (r == null) return;
-                        if (r.files.isEmpty) return;
-                        if (r.files.single.path == null) return;
+                        final file = await openFile();
+                        if (file == null) return;
 
-                        String path = r.files.single.path!;
-                        File f = File(path);
-                        int size = await f.length();
+                        final path = file.path;
 
-                        Attachment newAtt = Attachment(
+                        final f = File(path);
+                        final size = await f.length();
+
+                        final name = path.split(RegExp(r'[\\/]+')).last;
+
+                        Attachment n = Attachment(
                           inspectionItemId: item.id!,
-                          fileName: r.files.single.name,
+                          fileName: name,
                           filePath: path,
                           fileSize: size,
                           synced: 0
                         );
 
-                        await InternalDB.addAttachment(newAtt);
+                        await InternalDB.addAttachment(n);
                         await refreshAttachments();
                       },
                       child: const Text('Add Attachment')
